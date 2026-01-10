@@ -5,8 +5,15 @@ authors = ["Paul Hauner <paul@paulhauner.com>"]
 edition = { workspace = true }
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["real_crypto"]
+# Use real cryptographic implementations (requires C compiler).
+real_crypto = ["bls/supranational"]
+# Use fake cryptographic implementations that don't require a C compiler.
+fake_crypto = ["bls/fake_crypto"]
+
 [dependencies]
-bls = { workspace = true }
+bls = { workspace = true, default-features = false }
 ethereum_hashing = { workspace = true }
 hex = { workspace = true }
 num-bigint = "0.4.2"

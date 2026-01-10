@@ -5,17 +5,22 @@ authors = ["Pawan Dhananjay <pawandhananjay@gmail.com>"]
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["real_crypto"]
+real_crypto = ["dep:c-kzg", "dep:rust_eth_kzg", "dep:rayon"]
+fake_crypto = []
+
 [dependencies]
 arbitrary = { workspace = true }
-c-kzg = { workspace = true }
+c-kzg = { workspace = true, optional = true }
 derivative = { workspace = true }
 ethereum_hashing = { workspace = true }
 ethereum_serde_utils = { workspace = true }
 ethereum_ssz = { workspace = true }
 ethereum_ssz_derive = { workspace = true }
 hex = { workspace = true }
-rayon = { workspace = true }
-rust_eth_kzg = { workspace = true }
+rayon = { workspace = true, optional = true }
+rust_eth_kzg = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

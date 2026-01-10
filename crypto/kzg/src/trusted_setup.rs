@@ -1,4 +1,4 @@
-use crate::{Error, PeerDASTrustedSetup};
+use crate::real_crypto::{Error, PeerDASTrustedSetup};
 use serde::{
     de::{self, Deserializer, Visitor},
     Deserialize, Serialize,

@@ -8,7 +8,9 @@ use crate::{
 };
 use bls::Signature;
 use derivative::Derivative;
-use kzg::{BYTES_PER_BLOB, BYTES_PER_FIELD_ELEMENT, Blob as KzgBlob, Kzg, KzgCommitment, KzgProof};
+use kzg::{BYTES_PER_BLOB, BYTES_PER_FIELD_ELEMENT, KzgCommitment, KzgProof};
+#[cfg(feature = "real_crypto")]
+use kzg::{Blob as KzgBlob, Kzg};
 use merkle_proof::{MerkleTreeError, merkle_root_from_branch, verify_merkle_proof};
 use rand::Rng;
 use safe_arith::ArithError;
@@ -238,6 +240,7 @@ impl<E: EthSpec> BlobSidecar<E> {
         )
     }
 
+    #[cfg(feature = "real_crypto")]
     pub fn random_valid<R: Rng>(rng: &mut R, kzg: &Kzg) -> Result<Self, String> {
         let mut blob_bytes = vec![0u8; BYTES_PER_BLOB];
         rng.fill_bytes(&mut blob_bytes);
