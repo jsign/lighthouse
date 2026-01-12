@@ -329,8 +329,9 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
                 .write(payload.tree_hash_root().as_ref())
                 .expect("should write execution payload hash");
 
-            // Hash versioned hashes (as a list) - compute tree hash of the vector
-            let versioned_hashes_root = tree_hash_list(&req.versioned_hashes);
+            // Hash versioned hashes (as a list)
+            // Properly accounts for SSZ List[T, MAX_BLOB_COMMITMENTS_PER_BLOCK] specification
+            let versioned_hashes_root = tree_hash_versioned_hashes(&req.versioned_hashes);
             hasher
                 .write(versioned_hashes_root.as_ref())
                 .expect("should write versioned hashes");
@@ -351,13 +352,18 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
             hasher
                 .write(payload.tree_hash_root().as_ref())
                 .expect("should write execution payload hash");
-            info!("hellooo {}", hex::encode(payload.tree_hash_root()));
+            info!(
+                "execution_payload {}",
+                hex::encode(payload.tree_hash_root())
+            );
 
             // Hash versioned hashes
-            let versioned_hashes_root = tree_hash_list(&req.versioned_hashes);
+            // Properly accounts for SSZ List[T, MAX_BLOB_COMMITMENTS_PER_BLOCK] specification
+            let versioned_hashes_root = tree_hash_versioned_hashes(&req.versioned_hashes);
             hasher
                 .write(versioned_hashes_root.as_ref())
                 .expect("should write versioned hashes");
+            info!("versioned_hashes {}", hex::encode(versioned_hashes_root));
 
             // Hash parent beacon block root
             hasher
@@ -368,6 +374,10 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
             hasher
                 .write(req.execution_requests.tree_hash_root().as_ref())
                 .expect("should write execution requests");
+            info!(
+                "execution_requests {}",
+                hex::encode(req.execution_requests.tree_hash_root())
+            );
 
             tree_hash::Hash256::from_slice(hasher.finish().expect("should finish hashing").as_ref())
         }
@@ -379,7 +389,7 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
                 .write(payload.tree_hash_root().as_ref())
                 .expect("should write execution payload hash");
 
-            let versioned_hashes_root = tree_hash_list(&req.versioned_hashes);
+            let versioned_hashes_root = tree_hash_versioned_hashes(&req.versioned_hashes);
             hasher
                 .write(versioned_hashes_root.as_ref())
                 .expect("should write versioned hashes");
@@ -402,7 +412,7 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
                 .write(payload.tree_hash_root().as_ref())
                 .expect("should write execution payload hash");
 
-            let versioned_hashes_root = tree_hash_list(&req.versioned_hashes);
+            let versioned_hashes_root = tree_hash_versioned_hashes(&req.versioned_hashes);
             hasher
                 .write(versioned_hashes_root.as_ref())
                 .expect("should write versioned hashes");
@@ -420,20 +430,33 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
     }
 }
 
-/// Helper function to compute tree hash root of a list of Hash256 values (versioned hashes)
-fn tree_hash_list(list: &[types::Hash256]) -> tree_hash::Hash256 {
-    use tree_hash::MerkleHasher;
+/// Helper function to compute SSZ tree hash root of versioned hashes list
+/// Accounts for MAX_BLOB_COMMITMENTS_PER_BLOCK = 4096 as per consensus specs
+fn tree_hash_versioned_hashes(hashes: &[types::Hash256]) -> tree_hash::Hash256 {
+    use tree_hash::{mix_in_length, merkle_root, Hash256 as TreeHashHash256};
 
-    if list.is_empty() {
-        return tree_hash::Hash256::from([0u8; 32]);
+    // MAX_BLOB_COMMITMENTS_PER_BLOCK from consensus specs
+    const MAX_BLOB_COMMITMENTS: usize = 4096;
+
+    if hashes.is_empty() {
+        // For empty list, return merkleize of empty + mix in length 0
+        return mix_in_length(&TreeHashHash256::from([0u8; 32]), 0);
     }
 
-    // For a list of fixed-size elements (Hash256), we hash them as a packed structure
-    let mut hasher = MerkleHasher::with_leaves(list.len());
+    // Convert Hash256 values to byte slices for merkleization
+    // types::Hash256 is alloy_primitives::FixedBytes<32>
+    let bytes: Vec<u8> = hashes
+        .iter()
+        .flat_map(|h| {
+            let bytes: &[u8] = h.as_ref();
+            bytes.iter().copied()
+        })
+        .collect();
 
-    for hash in list {
-        hasher.write(hash.as_ref()).expect("should write hash");
-    }
+    // Merkleize with limit = MAX_BLOB_COMMITMENTS (each Hash256 is 1 chunk = 32 bytes)
+    let root = merkle_root(&bytes, MAX_BLOB_COMMITMENTS);
 
-    tree_hash::Hash256::from_slice(hasher.finish().expect("should finish hashing").as_ref())
+    // Mix in the actual length as per SSZ List[T, N] specification
+    mix_in_length(&root, hashes.len())
 }
+
