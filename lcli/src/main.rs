@@ -5,6 +5,7 @@ mod http_sync;
 mod indexed_attestations;
 mod mnemonic_validators;
 mod mock_el;
+mod new_payload_request;
 mod parse_ssz;
 mod skip_slots;
 mod state_root;
@@ -18,7 +19,7 @@ use parse_ssz::run_parse_ssz;
 use std::path::PathBuf;
 use std::process;
 use std::str::FromStr;
-use tracing_subscriber::{filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, filter::LevelFilter, layer::SubscriberExt, util::SubscriberInitExt};
 use types::{EthSpec, EthSpecId};
 
 fn main() {
@@ -629,6 +630,35 @@ fn main() {
                         .display_order(0)
                 )
         )
+        .subcommand(
+            Command::new("new-payload-request")
+                .about("Fetches a beacon block and converts it to a NewPayloadRequest for execution engines")
+                .arg(
+                    Arg::new("slot")
+                        .long("slot")
+                        .value_name("SLOT")
+                        .action(ArgAction::Set)
+                        .help("The slot number of the block to fetch")
+                        .required(true)
+                        .display_order(0)
+                )
+                .arg(
+                    Arg::new("beacon-url")
+                        .long("beacon-url")
+                        .value_name("URL")
+                        .action(ArgAction::Set)
+                        .help("URL to a beacon-API provider (default: http://localhost:5052)")
+                        .display_order(0)
+                )
+                .arg(
+                    Arg::new("output")
+                        .long("output")
+                        .value_name("PATH")
+                        .action(ArgAction::Set)
+                        .help("Path to write JSON output to file (default: stdout)")
+                        .display_order(0)
+                )
+        )
         .get_matches();
 
     let result = matches
@@ -684,7 +714,14 @@ fn run<E: EthSpec>(env_builder: EnvironmentBuilder<E>, matches: &ArgMatches) -> 
     if let Some(stdout) = stdout_logging_layer {
         logging_layers.push(stdout);
     }
+
+    // Add EnvFilter to support RUST_LOG environment variable
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
     let logging_result = tracing_subscriber::registry()
+        .with(env_filter)
         .with(logging_layers)
         .try_init();
 
@@ -759,6 +796,11 @@ fn run<E: EthSpec>(env_builder: EnvironmentBuilder<E>, matches: &ArgMatches) -> 
             let network_config = get_network_config()?;
             http_sync::run::<E>(env, network_config, matches)
                 .map_err(|e| format!("Failed to run http-sync command: {}", e))
+        }
+        Some(("new-payload-request", matches)) => {
+            let network_config = get_network_config()?;
+            new_payload_request::run::<E>(env, network_config, matches)
+                .map_err(|e| format!("Failed to run new-payload-request command: {}", e))
         }
         Some((other, _)) => Err(format!("Unknown subcommand {}. See --help.", other)),
         _ => Err("No subcommand provided. See --help.".to_string()),
