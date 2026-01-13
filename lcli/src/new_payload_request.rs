@@ -433,18 +433,14 @@ fn compute_new_payload_request_tree_hash<E: EthSpec>(
 /// Helper function to compute SSZ tree hash root of versioned hashes list
 /// Accounts for MAX_BLOB_COMMITMENTS_PER_BLOCK = 4096 as per consensus specs
 fn tree_hash_versioned_hashes(hashes: &[types::Hash256]) -> tree_hash::Hash256 {
-    use tree_hash::{mix_in_length, merkle_root, Hash256 as TreeHashHash256};
+    use tree_hash::{merkle_root, mix_in_length};
 
     // MAX_BLOB_COMMITMENTS_PER_BLOCK from consensus specs
     const MAX_BLOB_COMMITMENTS: usize = 4096;
 
-    if hashes.is_empty() {
-        // For empty list, return merkleize of empty + mix in length 0
-        return mix_in_length(&TreeHashHash256::from([0u8; 32]), 0);
-    }
-
     // Convert Hash256 values to byte slices for merkleization
     // types::Hash256 is alloy_primitives::FixedBytes<32>
+    // For empty list, this will be an empty Vec which merkle_root handles correctly
     let bytes: Vec<u8> = hashes
         .iter()
         .flat_map(|h| {
@@ -454,9 +450,9 @@ fn tree_hash_versioned_hashes(hashes: &[types::Hash256]) -> tree_hash::Hash256 {
         .collect();
 
     // Merkleize with limit = MAX_BLOB_COMMITMENTS (each Hash256 is 1 chunk = 32 bytes)
+    // This correctly handles empty lists by merkleizing 4096 zero leaves
     let root = merkle_root(&bytes, MAX_BLOB_COMMITMENTS);
 
     // Mix in the actual length as per SSZ List[T, N] specification
     mix_in_length(&root, hashes.len())
 }
-
